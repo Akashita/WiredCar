@@ -1,0 +1,6 @@
+Flask==2.0.2
+lxml==4.7.1
+PyYAML==6.0
+rpclib==2.8.0rc0
+spyne==2.13.16
+Werkzeug==2.0.2
