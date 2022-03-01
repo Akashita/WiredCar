@@ -11,6 +11,9 @@ app.use('/bs', express.static(__dirname + '/node_modules/bootstrap/dist'));
 app.use('/jq', express.static(__dirname + '/node_modules/jquery/dist'));
 
 
+// #############################################################
+//      SET CORS HEADERS FOR ALL REQUESTS
+// #############################################################
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Origin, X-requested-With, Content-Type, Accept, Authorization');
@@ -18,13 +21,17 @@ app.use((req, res, next) => {
     next();
 });
 
+
+// #############################################################
+//      GET CARS : CALL SOAP API TO GET CARS DATA
+// #############################################################
 app.post('/api/get-cars',(req,res) => {
     if(req.body != null && req.body.search_text){
         var text = req.body.search_text;
         var soap = require('strong-soap').soap;
         var url = 'https://soapwiredcar.herokuapp.com/soapapi?wsdl';
         try {
-            soap.createClient(url, function(err, client) {
+            soap.createClient(url, function(err, client) { //SOAP CALL
                 client.getCars({str:text}, function(err, result){
                     var cars = [];
                     JSON.parse(result.getCarsResult).forEach(element => {
@@ -41,6 +48,45 @@ app.post('/api/get-cars',(req,res) => {
     }
 });
 
+// #############################################################
+//      GET LOCALITY : CALL OPENROUTESERVICE TO GET LOCALITY FROM USER INPUT
+// #############################################################
+app.post('/api/get-locality',(req,res) => {
+
+    if(req.body != null && req.body.search_text){
+        var text = req.body.search_text;
+        const url = "https://api.openrouteservice.org/geocode/search";
+        const data = {
+            params: {
+                api_key: "5b3ce3597851110001cf6248118c93613b444126b3434702f7925bed",
+                text: text,
+                layers: "address,locality"
+            }
+        }
+        axios.get(url, data).then(response => { 
+            //OpenRouteservice CALL to retrieve a locality from user input
+            var response_data = [];
+            response.data.features.forEach(feature => {
+                locality = {
+                    "name": feature.properties.label,
+                    "props": feature.geometry.coordinates,
+                }
+                response_data.push(locality);
+            });
+            res.send(JSON.stringify(response_data));
+        }).catch(error => {  
+            console.log(error);
+            res.send(false);      
+        });
+    } else {
+        res.send(false);
+    }
+
+});
+
+// #############################################################
+//      GET PATH : PROCESS THE JOURNEY 
+// #############################################################
 app.post('/api/get-path',(req,res) => {
     if(Object.keys(req.body).length === 0 && req.body.constructor === Object){
         res.status(400).send(false);
@@ -61,7 +107,10 @@ app.post('/api/get-path',(req,res) => {
             }
         }
         axios.post(urlRoute, dataRoute, configRoute).then(async function(response) {
+            //OpenRouteservice CALL to retrieve a path from user input
             var line = response.data['features'][0];
+
+            //TURF is a JS library that can process geojson to get relevant data
             var it = Math.floor(turf.length(line, 'kilometers') / carAutonomy);
 
             const radius = 50;
@@ -86,15 +135,18 @@ app.post('/api/get-path',(req,res) => {
                 };
                 try{
                     await axios.get(urlBornes, dataBornes, configBornes).then(response => {
+                        //Bornes-ivres call to retrieve a list of bornes in a radius of 50km around a point
                         var shortestBorneFeature = response.data.records[0];
                         var shortestBorneCoords = shortestBorneFeature.geometry.coordinates;
 
                         response.data.records.forEach(function(record){
+                            //For each borne, we check if it is the shortest one
                             if(turf.distance(record.geometry.coordinates, point, 'kilometers') < turf.distance(shortestBorneCoords, point, 'kilometers')){
                                 shortestBorneFeature = record;
                                 shortestBorneCoords = shortestBorneFeature.geometry.coordinates;
                             }
                         });
+                        //We add the shortest borne to the list of bornes
                         bornes.push(shortestBorneFeature);
                         bornesCoords.push(shortestBorneCoords);
                     }).catch(error => {
@@ -107,6 +159,7 @@ app.post('/api/get-path',(req,res) => {
             }
             dataRoute = {"coordinates": [coordArray[0]].concat(bornesCoords).concat([coordArray[1]])};
             axios.post(urlRoute, dataRoute, configRoute).then(response => {
+                //OpenRouteservice CALL to retrieve the new path with the bornes
                 res.send(JSON.stringify([response.data, bornes]));
             }).catch(error => {
                 console.log(error);
@@ -119,40 +172,6 @@ app.post('/api/get-path',(req,res) => {
     }
 
 });
-
-
-app.post('/api/get-locality',(req,res) => {
-
-    if(req.body != null && req.body.search_text){
-        var text = req.body.search_text;
-        const url = "https://api.openrouteservice.org/geocode/search";
-        const data = {
-            params: {
-                api_key: "5b3ce3597851110001cf6248118c93613b444126b3434702f7925bed",
-                text: text,
-                layers: "address,locality"
-            }
-        }
-        axios.get(url, data).then(response => {
-            var response_data = [];
-            response.data.features.forEach(feature => {
-                locality = {
-                    "name": feature.properties.label,
-                    "props": feature.geometry.coordinates,
-                }
-                response_data.push(locality);
-            });
-            res.send(JSON.stringify(response_data));
-        }).catch(error => {  
-            console.log(error);
-            res.send(false);      
-        });
-    } else {
-        res.send(false);
-    }
-
-});
-
 
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');

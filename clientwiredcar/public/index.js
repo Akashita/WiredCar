@@ -39,6 +39,7 @@ jQuery(function(){
             showToast("Error", "Please select an arrival", false);
         }
         if(carProps && departureProps && arrivalProps){
+            //All the inputs are filled
             $("#submitForm").find('svg').hide("fast", function(){
                 $("#submitForm").prop('disable',true);
                 $("#submitForm").find('div').show("fast");
@@ -47,6 +48,7 @@ jQuery(function(){
             departureProps = JSON.parse(departureProps);
             arrivalProps = JSON.parse(arrivalProps);
             $.ajax({
+                //Call of API to get the final path
                 method: 'POST',
                 url: getpath_middleware_url,
                 contentType: "application/json",
@@ -54,7 +56,7 @@ jQuery(function(){
                 data: JSON.stringify({"departureProps": departureProps, "arrivalProps": arrivalProps, "carAutonomy": carProps.autonomy}),
                 success: function(data){
                     $('.card').css('opacity', '0');
-
+                    //The GEOJSON retrived from the api is transformed into a Leaflet layer through the show map function
                     showMap(data[0]['features'][0], data[1]);
                 },
                 error: function(data){
@@ -65,6 +67,7 @@ jQuery(function(){
         }
     });
 
+    //#################  HANDLE CLICK ON A SELECTABLE RESULT (car, departure arrival) #######################
     $('.resultContainer').on('click', '.result', function(){
         var props = $(this).attr('data-props');
         var name = $(this).text();
@@ -72,29 +75,30 @@ jQuery(function(){
         $(this).parent().prev().attr('data-props', props);
     });
 
+    //#################  DISPLAY THE RESULT CONTAINER WHEN THE INPUT IS FOCUSED #######################
     $('.search-bar').on('focus', function(e){
         $(this).next().fadeIn('fast');
     });
 
+    //#################  HIDE THE RESULT CONTAINER WHEN THE INPUT IS FOCUSED-OUT #######################
     $('.search-bar').on('focusout', function(e){
         $(this).next().fadeOut('fast');
     });
 
 });
 
+//#################  DEBUG, USED TO SHOW THE MAP WHITHOUT SENDING THE FORM #######################
 function debugShowMap(){
     $( "#map" ).animate({
         height: "100vh",
       }, 300, function() {
         if(currentMap == undefined){
             currentMap = L.map('map', {
-                /*args*/
             });
         }
       $( "html" ).animate({
         scrollTop: window.innerHeight,
       }, 300, function() {
-        // Animation complete.
       });
     });
 }
@@ -102,6 +106,8 @@ function debugShowMap(){
 // #############################################################
 //                  Functions
 // #############################################################
+
+//################# INTIALIZE THE MAP WITH GEOJSON (retrived from get-path middleware), AND A LIST OF BORNES #######################
 function showMap(geojson, bornes){
     $( "main" ).animate({
         height: "100vh",
@@ -122,7 +128,7 @@ function showMap(geojson, bornes){
         jcard.find('#journeyDeparture').html("<b>Departure :</b> " + $('#searchDeparture').val());
         jcard.find('#journeyArrival').html("<b>Arrival : </b>" + $('#searchArrival').val());
 
-        //#################  REST API #######################
+        //#################  REST API (traveltime) #######################
 
         var timeWithoutStop = parseInt(geojson.properties.summary.duration); //In seconds
         var stops = bornes.length;
@@ -154,6 +160,7 @@ function showMap(geojson, bornes){
                     cCard.find('#carChargingTime').html("<b>Charging time : </b>" + carProps.chargingtime/60 + " min");
                     cCard.find('.card-img-top').attr('src', carProps.img);   
                     
+                    //All the data are now displayed, we can reset the (car, departure, arrival) inputs
                     clearForm();
             },
             error: function(data){
@@ -161,6 +168,7 @@ function showMap(geojson, bornes){
             }
         });
 
+        //The geojson is transformed into a Leaflet layer
         var pathLayer = L.geoJSON(geojson).addTo(currentMap);
         currentMap.fitBounds(pathLayer.getBounds());
 
@@ -190,7 +198,7 @@ function showMap(geojson, bornes){
             popupAnchor: [0, -60],
         });
 
-
+        //The bornes popup is filled with bornes data
         bornes.forEach(borne => {
             var borneName = borne.fields.ad_station;
             var bornePrise = borne.fields.type_prise;
@@ -208,10 +216,6 @@ function showMap(geojson, bornes){
         });
 
 
-
-        //Center the map on the path
-        //map.fitBounds(geojson.getBounds());
-
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(currentMap);
@@ -220,10 +224,10 @@ function showMap(geojson, bornes){
       $( "html" ).animate({
         scrollTop: window.innerHeight,
       }, 300, function() {
-        // Animation complete.
       });
 }
 
+//#################  RESET FORMS  #######################
 function clearForm(){
     $("#submitForm").find('div').hide("fast", function(){
         $("#submitForm").find('svg').show("fast");
@@ -240,6 +244,7 @@ function clearForm(){
 
 var timer;
 
+//#################  HANDLE FORMS INPUT (car, departure, arrival) #######################
 function fillFormResult(searchId, resultId, middlewareUrl){
     $(searchId).on('keyup paste', function(e){
         clearTimeout(timer);
@@ -247,6 +252,7 @@ function fillFormResult(searchId, resultId, middlewareUrl){
             var search_text = $(searchId).val();
             if(search_text){
                 $.ajax({
+                    //Call API of the targeted middleware
                     type: 'POST',
                     url: middlewareUrl,
                     contentType: "application/json",
@@ -279,6 +285,7 @@ function fillFormResult(searchId, resultId, middlewareUrl){
 }
 
 
+//#################  TOASTS FOR ERRORS MANAGEMENT #######################
 function showToast(title, message, isSuccess= true){
    var toast = $(`<div class="toast" role="alert" aria-live="assertive" aria-atomic="true">
                     <div class="toast-header">
